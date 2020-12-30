@@ -3,10 +3,10 @@
 #![feature(abi_x86_interrupt)]
 
 use core::panic::PanicInfo;
-use blog_os::serial_print;
+use bare_metal_pacman::serial_print;
 use lazy_static::lazy_static;
 use x86_64::structures::idt::InterruptDescriptorTable;
-use blog_os::{exit_qemu, QemuExitCode, serial_println};
+use bare_metal_pacman::{exit_qemu, QemuExitCode, serial_println};
 use x86_64::structures::idt::InterruptStackFrame;
 
 extern "x86-interrupt" fn test_double_fault_handler(
@@ -24,7 +24,7 @@ lazy_static! {
         unsafe {
             idt.double_fault
                 .set_handler_fn(test_double_fault_handler)
-                .set_stack_index(blog_os::gdt::DOUBLE_FAULT_IST_INDEX);
+                .set_stack_index(bare_metal_pacman::gdt::DOUBLE_FAULT_IST_INDEX);
         }
 
         idt
@@ -39,7 +39,7 @@ pub fn init_test_idt() {
 pub extern "C" fn _start() -> ! {
     serial_print!("stack_overflow::stack_overflow...\t");
 
-    blog_os::gdt::init();
+    bare_metal_pacman::gdt::init();
     init_test_idt();
 
     // trigger a stack overflow
@@ -56,5 +56,5 @@ fn stack_overflow() {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    blog_os::test_panic_handler(info)
+    bare_metal_pacman::test_panic_handler(info)
 }

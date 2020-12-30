@@ -1,9 +1,8 @@
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use crate::{print,println,gdt};
+use crate::{println,gdt};
 use lazy_static::lazy_static;
 use pic8259_simple::ChainedPics;
 use spin::Mutex;
-use pc_keyboard::DecodedKey;
 use crate::pacman::Pacman;
 
 lazy_static! {
@@ -62,13 +61,13 @@ impl InterruptIndex {
 }
 
 lazy_static! {
-    static ref game: Mutex<Pacman> = Mutex::new(Pacman::new());
+    static ref GAME: Mutex<Pacman> = Mutex::new(Pacman::new());
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(
     _stack_frame: &mut InterruptStackFrame)
 {
-    game.lock().tick();
+    GAME.lock().tick();
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
@@ -78,7 +77,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(
 extern "x86-interrupt" fn keyboard_interrupt_handler(
     _stack_frame: &mut InterruptStackFrame)
 {
-    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+    use pc_keyboard::{layouts, HandleControl, Keyboard, ScancodeSet1};
     use x86_64::instructions::port::Port;
 
     lazy_static! {
@@ -93,7 +92,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
 
     let scancode: u8 = unsafe { port.read() };
     if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        game.lock().key(keyboard.process_keyevent(key_event));
+        GAME.lock().key(keyboard.process_keyevent(key_event));
     }
 
     unsafe {

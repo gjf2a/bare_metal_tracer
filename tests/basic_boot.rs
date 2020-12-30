@@ -2,7 +2,7 @@
 #![no_main]
 #![feature(custom_test_frameworks)]
 #![reexport_test_harness_main = "test_main"]
-#![test_runner(blog_os::test_runner)]
+#![test_runner(bare_metal_pacman::test_runner)]
 
 use core::panic::PanicInfo;
 
@@ -15,10 +15,10 @@ pub extern "C" fn _start() -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    blog_os::test_panic_handler(info)
+    bare_metal_pacman::test_panic_handler(info)
 }
 
-use blog_os::println;
+use bare_metal_pacman::println;
 
 #[test_case]
 fn test_println() {

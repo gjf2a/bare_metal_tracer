@@ -2,13 +2,13 @@ use crate::vga_buffer::{BUFFER_WIDTH, BUFFER_HEIGHT, plot, ColorCode, Color};
 use pc_keyboard::{KeyCode, DecodedKey};
 use crate::println;
 
-#[derive(Copy,Clone,Eq,PartialEq)]
+#[derive(Debug,Copy,Clone,Eq,PartialEq)]
 #[repr(u8)]
 pub enum Dir {
     N, S, E, W
 }
 
-#[derive(Copy,Clone,Eq,PartialEq)]
+#[derive(Debug,Copy,Clone,Eq,PartialEq)]
 #[repr(u8)]
 enum Cell {
     Dot,
@@ -17,7 +17,7 @@ enum Cell {
     PowerDot
 }
 
-#[derive(Copy,Clone,Eq,PartialEq)]
+#[derive(Debug,Copy,Clone,Eq,PartialEq)]
 pub struct Position {
     col: i16, row: i16
 }
@@ -41,7 +41,7 @@ impl Position {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone,Eq,PartialEq)]
 pub struct Pacman {
     cells: [[Cell; BUFFER_WIDTH]; BUFFER_HEIGHT],
     pacman: Position,
@@ -130,10 +130,10 @@ impl Pacman {
 
     fn update_pacman_char(&mut self, dir: Dir) {
         self.pacman_char = match dir {
-            Dir::N => '^',
-            Dir::S => 'v',
-            Dir::E => '>',
-            Dir::W => '<'
+            Dir::N => 'v',
+            Dir::S => '^',
+            Dir::E => '<',
+            Dir::W => '>'
         }
     }
 
@@ -182,5 +182,13 @@ fn key2dir(key: Option<DecodedKey>) -> Option<Dir> {
                 _ => None
             }
         }
+    }
+}
+
+#[test_case]
+fn test_neighbor_dir() {
+    let p = Position {col: 4, row: 2};
+    for (d, col, row) in [(Dir::N, 4, 1), (Dir::S, 4, 3), (Dir::E, 5, 2), (Dir::W, 3, 2)].iter() {
+        assert_eq!(p.neighbor(*d), Position {col: *col, row: *row});
     }
 }

@@ -5,7 +5,7 @@
 #![reexport_test_harness_main = "test_main"]
 
 use core::panic::PanicInfo;
-use blog_os::{QemuExitCode, exit_qemu, serial_println, serial_print};
+use bare_metal_pacman::{QemuExitCode, exit_qemu, serial_println, serial_print};
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
