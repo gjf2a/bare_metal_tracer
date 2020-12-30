@@ -2,8 +2,9 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 use crate::{print,println,gdt};
 use lazy_static::lazy_static;
 use pic8259_simple::ChainedPics;
-use spin;
+use spin::Mutex;
 use pc_keyboard::DecodedKey;
+use crate::pacman::Pacman;
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -40,8 +41,8 @@ extern "x86-interrupt" fn double_fault_handler(
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
-pub static PICS: spin::Mutex<ChainedPics> =
-    spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
+pub static PICS: Mutex<ChainedPics> =
+    Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
@@ -60,31 +61,14 @@ impl InterruptIndex {
     }
 }
 
-struct DispatchFunctions {
-    timer: fn(),
-    keyboard: fn(Option<DecodedKey>)
-}
-
 lazy_static! {
-    static ref DF: spin::Mutex<DispatchFunctions> = spin::Mutex::new(DispatchFunctions {timer: default_no_arg, keyboard: default_keyboard});
-}
-
-fn default_no_arg() {}
-
-fn default_keyboard(_: Option<DecodedKey>) {}
-
-pub fn set_timer_dispatch(f: fn()) {
-    DF.lock().timer = f;
-}
-
-pub fn set_keyboard_dispatch(f: fn(Option<DecodedKey>)) {
-    DF.lock().keyboard = f;
+    static ref game: Mutex<Pacman> = Mutex::new(Pacman::new());
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(
     _stack_frame: &mut InterruptStackFrame)
 {
-    (DF.lock().timer)();
+    game.lock().tick();
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
@@ -95,7 +79,6 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
     _stack_frame: &mut InterruptStackFrame)
 {
     use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
-    use spin::Mutex;
     use x86_64::instructions::port::Port;
 
     lazy_static! {
@@ -110,7 +93,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
 
     let scancode: u8 = unsafe { port.read() };
     if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        (DF.lock().keyboard)(keyboard.process_keyevent(key_event));
+        game.lock().key(keyboard.process_keyevent(key_event));
     }
 
     unsafe {
