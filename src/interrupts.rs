@@ -3,6 +3,7 @@ use crate::{print,println,gdt};
 use lazy_static::lazy_static;
 use pic8259_simple::ChainedPics;
 use spin;
+use pc_keyboard::DecodedKey;
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -59,10 +60,31 @@ impl InterruptIndex {
     }
 }
 
+struct DispatchFunctions {
+    timer: fn(),
+    keyboard: fn(Option<DecodedKey>)
+}
+
+lazy_static! {
+    static ref DF: spin::Mutex<DispatchFunctions> = spin::Mutex::new(DispatchFunctions {timer: default_no_arg, keyboard: default_keyboard});
+}
+
+fn default_no_arg() {}
+
+fn default_keyboard(_: Option<DecodedKey>) {}
+
+pub fn set_timer_dispatch(f: fn()) {
+    DF.lock().timer = f;
+}
+
+pub fn set_keyboard_dispatch(f: fn(Option<DecodedKey>)) {
+    DF.lock().keyboard = f;
+}
+
 extern "x86-interrupt" fn timer_interrupt_handler(
     _stack_frame: &mut InterruptStackFrame)
 {
-    print!(".");
+    (DF.lock().timer)();
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
@@ -88,12 +110,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
 
     let scancode: u8 = unsafe { port.read() };
     if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        if let Some(key) = keyboard.process_keyevent(key_event) {
-            match key {
-                DecodedKey::Unicode(character) => print!("{}", character),
-                DecodedKey::RawKey(key) => print!("{:?}", key),
-            }
-        }
+        (DF.lock().keyboard)(keyboard.process_keyevent(key_event));
     }
 
     unsafe {
