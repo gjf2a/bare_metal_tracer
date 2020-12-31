@@ -171,25 +171,35 @@ impl PacmanGame {
         }
     }
 
+    fn cell(&self, p: Position) -> Cell {
+        self.cells[p.row as usize][p.col as usize]
+    }
+
     fn draw(&self) {
         for (row, contents) in self.cells.iter().enumerate() {
             for (col, cell) in contents.iter().enumerate() {
                 let p = Position {col: col as i16, row: row as i16};
-                let (c, color) = if p == self.pacman.pos {
-                    (self.pacman.icon(), ColorCode::new(Color::Yellow, Color::Black))
-                } else if self.ghosts.contains(&p) {
-                    ('A', ColorCode::new(Color::Red, Color::Black))
-                } else {
-                    match cell {
-                        Cell::Dot => ('.', ColorCode::new(Color::White, Color::Black)),
-                        Cell::Empty => (' ', ColorCode::new(Color::Black, Color::Black)),
-                        Cell::Wall => ('#', ColorCode::new(Color::Blue, Color::Black)),
-                        Cell::PowerDot => ('O', ColorCode::new(Color::Green, Color::Black))
-                    }
-                };
+                let (c, color) = self.get_icon_color(p, cell);
                 plot(col, row, c, color);
             }
         }
+    }
+
+    fn get_icon_color(&self, p: Position, cell: &Cell) -> (char, ColorCode) {
+        let (icon, foreground) =
+            if p == self.pacman.pos {
+                (self.pacman.icon(), Color::Yellow)
+            } else if self.ghosts.contains(&p) {
+                ('A', Color::Red)
+            } else {
+                match cell {
+                    Cell::Dot => ('.', Color::White),
+                    Cell::Empty => (' ', Color::Black),
+                    Cell::Wall => ('#', Color::Blue),
+                    Cell::PowerDot => ('O', Color::Green)
+                }
+            };
+        (icon, ColorCode::new(foreground, Color::Black))
     }
 
     fn update(&mut self) {
@@ -274,18 +284,32 @@ fn first_few_moves() {
         ('s', 0, 1, 9), ('s', 0, 1, 10), ('s', 0, 1, 11), ('s', 0, 0, 11), ('d', 1, 0, 12),
         ('d', 1, 0, 13), ('d', 1, 0, 14), ('d', 1, 0, 15), ('d', 1, 0, 16), ('d', 1, 0, 17),
         ('w', 0, -1, 18), ('w', 0, -1, 19), ('w', 0, -1, 20), ('w', 0, -1, 21), ('w', 0, -1, 22),
-        ('w', 0, -1, 23), ('w', 0, -1, 24)
+        ('w', 0, -1, 23), ('w', 0, -1, 24), ('w', 0, 0, 24)
     ];
     for (key, col_diff, row_diff, score) in tests.iter() {
         let was = game.pacman.pos;
         game.key(Some(DecodedKey::Unicode(*key)));
-        /*for _ in 0..UPDATE_FREQUENCY {
-            game.tick();
-        }*/
         game.update();
         let diff = game.pacman.pos - was;
         assert_eq!(diff.col, *col_diff);
         assert_eq!(diff.row, *row_diff);
         assert_eq!(game.dots_eaten, *score);
+    }
+}
+
+#[test_case]
+fn test_icons() {
+    let game = PacmanGame::new();
+    let tests = [
+        (game.pacman.pos, Color::Yellow, '<'),
+        (game.pacman.pos.neighbor(Dir::N), Color::Blue, '#'),
+        (game.pacman.pos.neighbor(Dir::W), Color::White, '.'),
+        (game.ghosts[0], Color::Red, 'A'),
+        (Position {row: 6, col: 8}, Color::Green, 'O')
+    ];
+
+    for (pos, foreground, icon) in tests.iter() {
+        assert_eq!(game.get_icon_color(*pos, &game.cell(*pos)),
+                   (*icon, ColorCode::new(*foreground, Color::Black)));
     }
 }
