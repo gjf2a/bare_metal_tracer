@@ -192,12 +192,15 @@ impl PacmanGame {
         }
     }
 
+    fn update(&mut self) {
+        self.resolve_move();
+        self.last_key = None;
+        self.pacman.tick();
+    }
+
     pub fn tick(&mut self) {
-        serial_println!("countdown: {}", self.countdown);
         if self.countdown == 0 {
-            self.resolve_move();
-            self.last_key = None;
-            self.pacman.tick();
+            self.update();
             self.draw();
             self.countdown = UPDATE_FREQUENCY;
         } else {
@@ -213,14 +216,10 @@ impl PacmanGame {
     }
 
     fn resolve_move(&mut self) {
-        serial_println!("last key: {:?}", self.last_key);
         if let Some(dir) = self.last_key {
-            serial_println!("dir: {:?}", dir);
             let neighbor = self.pacman.pos.neighbor(dir);
-            serial_println!("neighbor: {:?}", neighbor);
             if neighbor.is_legal() {
                 let (row, col) = neighbor.row_col();
-                serial_println!("neighbor contents: {:?}", self.cells[row][col]);
                 if self.cells[row][col] != Cell::Wall {
                     self.pacman.pos = neighbor;
                     self.pacman.dir = dir;
@@ -231,7 +230,6 @@ impl PacmanGame {
                         }
                         _ => {}
                     }
-                    serial_println!("Updated: {:?}", self.pacman);
                 }
             }
         }
@@ -272,20 +270,20 @@ fn test_neighbor_dir() {
 fn first_few_moves() {
     let mut game = PacmanGame::new();
     let tests = [('w', 0, 0, 0), ('a', -1, 0, 1), ('a', -1, 0, 2), ('a', -1, 0, 3),
-        ('a', -1, 0, 4), /*('s', 0, 1, 5), ('s', 0, 1, 6), ('s', 0, 1, 7), ('s', 0, 1, 8),
+        ('a', -1, 0, 4), ('s', 0, 1, 5), ('s', 0, 1, 6), ('s', 0, 1, 7), ('s', 0, 1, 8),
         ('s', 0, 1, 9), ('s', 0, 1, 10), ('s', 0, 1, 11), ('s', 0, 0, 11), ('d', 1, 0, 12),
         ('d', 1, 0, 13), ('d', 1, 0, 14), ('d', 1, 0, 15), ('d', 1, 0, 16), ('d', 1, 0, 17),
         ('w', 0, -1, 18), ('w', 0, -1, 19), ('w', 0, -1, 20), ('w', 0, -1, 21), ('w', 0, -1, 22),
-        ('w', 0, -1, 23), ('w', 0, 0, 23)*/
+        ('w', 0, -1, 23), ('w', 0, -1, 24)
     ];
     for (key, col_diff, row_diff, score) in tests.iter() {
         let was = game.pacman.pos;
         game.key(Some(DecodedKey::Unicode(*key)));
-        for _ in 0..UPDATE_FREQUENCY {
+        /*for _ in 0..UPDATE_FREQUENCY {
             game.tick();
-        }
+        }*/
+        game.update();
         let diff = game.pacman.pos - was;
-        serial_println!("diff: {:?}, key: {}", diff, key);
         assert_eq!(diff.col, *col_diff);
         assert_eq!(diff.row, *row_diff);
         assert_eq!(game.dots_eaten, *score);
