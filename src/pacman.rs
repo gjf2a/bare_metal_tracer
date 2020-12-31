@@ -19,6 +19,15 @@ impl Dir {
         }
     }
 
+    fn reverse(&self) -> Dir {
+        match self {
+            Dir::N => Dir::S,
+            Dir::S => Dir::N,
+            Dir::E => Dir::W,
+            Dir::W => Dir::E
+        }
+    }
+
     fn left(&self) -> Dir {
         match self {
             Dir::N => Dir::W,
@@ -148,7 +157,9 @@ impl Ghost {
     }
 
     fn go(&mut self, ahead: Cell, left: Cell, right: Cell, pacman_pos: Position) {
-        if left == Cell::Empty && (self.on_my_left(pacman_pos) || ahead == Cell::Wall) {
+        if left == Cell::Wall && ahead == Cell::Wall && right == Cell::Wall {
+            self.dir = self.dir.reverse();
+        } else if left == Cell::Empty && (self.on_my_left(pacman_pos) || ahead == Cell::Wall) {
             self.dir = self.dir.left();
         } else if right == Cell::Empty && (self.on_my_right(pacman_pos) || ahead == Cell::Wall) {
             self.dir = self.dir.right();
