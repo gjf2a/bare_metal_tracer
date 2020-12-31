@@ -18,6 +18,24 @@ impl Dir {
             Dir::W => '>'
         }
     }
+
+    fn left(&self) -> Dir {
+        match self {
+            Dir::N => Dir::W,
+            Dir::S => Dir::E,
+            Dir::E => Dir::N,
+            Dir::W => Dir::S
+        }
+    }
+
+    fn right(&self) -> Dir {
+        match self {
+            Dir::N => Dir::E,
+            Dir::S => Dir::W,
+            Dir::E => Dir::S,
+            Dir::W => Dir::N
+        }
+    }
 }
 
 impl From<char> for Dir {
@@ -75,16 +93,6 @@ impl Position {
 
 const UPDATE_FREQUENCY: usize = 3;
 
-#[derive(Debug,Clone,Eq,PartialEq)]
-pub struct PacmanGame {
-    cells: [[Cell; BUFFER_WIDTH]; BUFFER_HEIGHT],
-    pacman: Pacman,
-    ghosts: [Position; 4],
-    dots_eaten: u32,
-    countdown: usize,
-    last_key: Option<Dir>
-}
-
 #[derive(Copy,Clone,Eq,PartialEq,Debug)]
 struct Pacman {
     pos: Position, dir: Dir, open: bool
@@ -108,6 +116,48 @@ impl Pacman {
                 Dir::E | Dir::W => '-'
             }
         }
+    }
+}
+
+#[derive(Copy,Clone,Debug,Eq,PartialEq)]
+struct Ghost {
+    pos: Position, dir: Dir, color: Color
+}
+
+impl Ghost {
+    fn on_my_left(&self, other: Position) -> bool {
+        let offset = self.pos - other;
+        match self.dir {
+            Dir::N => offset.col > 0,
+            Dir::S => offset.col < 0,
+            Dir::E => offset.row > 0,
+            Dir::W => offset.row < 0
+        }
+    }
+
+    fn ahead_or_behind(&self, other: Position) -> bool {
+        let offset = self.pos - other;
+        match self.dir {
+            Dir::N | Dir::S => offset.col == 0,
+            Dir::E | Dir::W => offset.row == 0
+        }
+    }
+
+    fn on_my_right(&self, other: Position) -> bool {
+        !self.on_my_left(other) && !self.ahead_or_behind(other)
+    }
+
+    fn go(&mut self, ahead: Cell, left: Cell, right: Cell, pacman_pos: Position) {
+        if left == Cell::Empty && (self.on_my_left(pacman_pos) || ahead == Cell::Wall) {
+            self.dir = self.dir.left();
+        } else if right == Cell::Empty && (self.on_my_right(pacman_pos) || ahead == Cell::Wall) {
+            self.dir = self.dir.right();
+        }
+        self.pos = self.pos.neighbor(self.dir);
+    }
+
+    fn icon(&self) -> (char, ColorCode) {
+        ('A', ColorCode::new(self.color, Color::Black))
     }
 }
 
@@ -138,12 +188,25 @@ const START: &'static str =
      #.........A............................................................A.......#
      ################################################################################";
 
+#[derive(Debug,Clone,Eq,PartialEq)]
+pub struct PacmanGame {
+    cells: [[Cell; BUFFER_WIDTH]; BUFFER_HEIGHT],
+    pacman: Pacman,
+    ghosts: [Ghost; 4],
+    dots_eaten: u32,
+    countdown: usize,
+    last_key: Option<Dir>
+}
+
+const GHOST_STARTS: [(Dir, Color); 4] = [(Dir::E, Color::Red),  (Dir::W, Color::Pink), (Dir::E, Color::LightGreen), (Dir::W, Color::Cyan)];
+
 impl PacmanGame {
     pub fn new() -> Self {
         let mut game = PacmanGame {
             cells: [[Cell::Dot; BUFFER_WIDTH]; BUFFER_HEIGHT],
             pacman: Pacman::new(Position { col: 0, row: 0}, '>'),
-            ghosts: [Position {col: 0, row: 0}; 4], dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None};
+            ghosts: [Ghost { pos: Position {col: 0, row: 0}, dir: Dir::N, color: Color::Black }; 4],
+            dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None};
         let mut ghost = 0;
         for (row, row_chars) in START.split('\n').enumerate() {
             println!("row: {} len: {}", row, row_chars.len());
@@ -160,7 +223,8 @@ impl PacmanGame {
             '#' => self.cells[row][col] = Cell::Wall,
             '.' => {},
             'A' => {
-                self.ghosts[*ghost] = Position {row: row as i16, col: col as i16};
+                let (dir, color) = GHOST_STARTS[*ghost];
+                self.ghosts[*ghost] = Ghost {pos: Position {row: row as i16, col: col as i16}, dir, color};
                 *ghost += 1;
             },
             'O' => self.cells[row][col] = Cell::PowerDot,
@@ -189,9 +253,12 @@ impl PacmanGame {
         let (icon, foreground) =
             if p == self.pacman.pos {
                 (self.pacman.icon(), Color::Yellow)
-            } else if self.ghosts.contains(&p) {
-                ('A', Color::Red)
             } else {
+                for ghost in self.ghosts.iter() {
+                    if ghost.pos == p {
+                        return ghost.icon()
+                    }
+                }
                 match cell {
                     Cell::Dot => ('.', Color::White),
                     Cell::Empty => (' ', Color::Black),
