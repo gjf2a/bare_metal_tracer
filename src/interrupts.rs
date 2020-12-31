@@ -3,7 +3,7 @@ use crate::{println,gdt};
 use lazy_static::lazy_static;
 use pic8259_simple::ChainedPics;
 use spin::Mutex;
-use crate::pacman::Pacman;
+use crate::pacman::PacmanGame;
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -61,7 +61,7 @@ impl InterruptIndex {
 }
 
 lazy_static! {
-    static ref GAME: Mutex<Pacman> = Mutex::new(Pacman::new());
+    static ref GAME: Mutex<PacmanGame> = Mutex::new(PacmanGame::new());
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(

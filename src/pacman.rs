@@ -1,11 +1,35 @@
 use crate::vga_buffer::{BUFFER_WIDTH, BUFFER_HEIGHT, plot, ColorCode, Color};
 use pc_keyboard::{KeyCode, DecodedKey};
-use crate::println;
+use crate::{println,serial_println};
+use core::ops::Sub;
 
 #[derive(Debug,Copy,Clone,Eq,PartialEq)]
 #[repr(u8)]
 pub enum Dir {
     N, S, E, W
+}
+
+impl Dir {
+    fn icon(&self) -> char {
+        match self {
+            Dir::N => 'v',
+            Dir::S => '^',
+            Dir::E => '<',
+            Dir::W => '>'
+        }
+    }
+}
+
+impl From<char> for Dir {
+    fn from(icon: char) -> Self {
+        match icon {
+            '^' => Dir::S,
+            'v' => Dir::N,
+            '>' => Dir::W,
+            '<' => Dir::E,
+            _ => panic!("Illegal pacman icon: '{}'", icon)
+        }
+    }
 }
 
 #[derive(Debug,Copy,Clone,Eq,PartialEq)]
@@ -20,6 +44,14 @@ enum Cell {
 #[derive(Debug,Copy,Clone,Eq,PartialEq)]
 pub struct Position {
     col: i16, row: i16
+}
+
+impl Sub for Position {
+    type Output = Position;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Position {col: self.col - rhs.col, row: self.row - rhs.row}
+    }
 }
 
 impl Position {
@@ -41,13 +73,42 @@ impl Position {
     }
 }
 
+const UPDATE_FREQUENCY: usize = 3;
+
 #[derive(Debug,Clone,Eq,PartialEq)]
-pub struct Pacman {
+pub struct PacmanGame {
     cells: [[Cell; BUFFER_WIDTH]; BUFFER_HEIGHT],
-    pacman: Position,
-    pacman_char: char,
+    pacman: Pacman,
     ghosts: [Position; 4],
-    dots_eaten: u32
+    dots_eaten: u32,
+    countdown: usize,
+    last_key: Option<Dir>
+}
+
+#[derive(Copy,Clone,Eq,PartialEq,Debug)]
+struct Pacman {
+    pos: Position, dir: Dir, open: bool
+}
+
+impl Pacman {
+    fn new(pos: Position, icon: char) -> Self {
+        Pacman {pos, dir: Dir::from(icon), open: true}
+    }
+
+    fn tick(&mut self) {
+        self.open = !self.open;
+    }
+
+    fn icon(&self) -> char {
+        if self.open {
+            self.dir.icon()
+        } else {
+            match self.dir {
+                Dir::N | Dir::S => '|',
+                Dir::E | Dir::W => '-'
+            }
+        }
+    }
 }
 
 const START: &'static str =
@@ -77,42 +138,45 @@ const START: &'static str =
      #.........A............................................................A.......#
      ################################################################################";
 
-impl Pacman {
+impl PacmanGame {
     pub fn new() -> Self {
-        let mut cells = [[Cell::Dot; BUFFER_WIDTH]; BUFFER_HEIGHT];
-        let mut pacman = Position { col: 0, row: 0};
-        let mut pacman_char = '>';
-        let mut ghosts = [Position {col: 0, row: 0}; 4];
+        let mut game = PacmanGame {
+            cells: [[Cell::Dot; BUFFER_WIDTH]; BUFFER_HEIGHT],
+            pacman: Pacman::new(Position { col: 0, row: 0}, '>'),
+            ghosts: [Position {col: 0, row: 0}; 4], dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None};
         let mut ghost = 0;
         for (row, row_chars) in START.split('\n').enumerate() {
             println!("row: {} len: {}", row, row_chars.len());
-            for (col, chr) in row_chars.trim().chars().enumerate() {
-                match chr {
-                    '#' => cells[row][col] = Cell::Wall,
-                    '.' => {},
-                    'A' => {
-                        ghosts[ghost] = Position {row: row as i16, col: col as i16};
-                        ghost += 1;
-                    },
-                    'O' => cells[row][col] = Cell::PowerDot,
-                    '>' |'<' | '^' | 'v' => {
-                        pacman = Position {row: row as i16, col: col as i16};
-                        pacman_char = chr;
-                    },
-                    _ =>  panic!("Unrecognized character: '{}'", chr)
-                }
+            for (col, icon) in row_chars.trim().chars().enumerate() {
+                game.translate_icon(&mut ghost, row, col, icon);
             }
         }
         assert_eq!(ghost, 4);
-        Pacman {cells, pacman, pacman_char, ghosts, dots_eaten: 0}
+        game
+    }
+
+    fn translate_icon(&mut self, ghost: &mut usize, row: usize, col: usize, icon: char) {
+        match icon {
+            '#' => self.cells[row][col] = Cell::Wall,
+            '.' => {},
+            'A' => {
+                self.ghosts[*ghost] = Position {row: row as i16, col: col as i16};
+                *ghost += 1;
+            },
+            'O' => self.cells[row][col] = Cell::PowerDot,
+            '>' |'<' | '^' | 'v' => {
+                self.pacman = Pacman::new(Position {row: row as i16, col: col as i16}, icon);
+            },
+            _ =>  panic!("Unrecognized character: '{}'", icon)
+        }
     }
 
     fn draw(&self) {
         for (row, contents) in self.cells.iter().enumerate() {
             for (col, cell) in contents.iter().enumerate() {
                 let p = Position {col: col as i16, row: row as i16};
-                let (c, color) = if p == self.pacman {
-                    (self.pacman_char, ColorCode::new(Color::Yellow, Color::Black))
+                let (c, color) = if p == self.pacman.pos {
+                    (self.pacman.icon(), ColorCode::new(Color::Yellow, Color::Black))
                 } else if self.ghosts.contains(&p) {
                     ('A', ColorCode::new(Color::Red, Color::Black))
                 } else {
@@ -128,27 +192,38 @@ impl Pacman {
         }
     }
 
-    fn update_pacman_char(&mut self, dir: Dir) {
-        self.pacman_char = match dir {
-            Dir::N => 'v',
-            Dir::S => '^',
-            Dir::E => '<',
-            Dir::W => '>'
+    pub fn tick(&mut self) {
+        serial_println!("countdown: {}", self.countdown);
+        if self.countdown == 0 {
+            self.resolve_move();
+            self.last_key = None;
+            self.pacman.tick();
+            self.draw();
+            self.countdown = UPDATE_FREQUENCY;
+        } else {
+            self.countdown -= 1;
         }
     }
 
-    pub fn tick(&mut self) {
-        self.draw();
+    pub fn key(&mut self, key: Option<DecodedKey>) {
+        let key = key2dir(key);
+        if key.is_some() {
+            self.last_key = key;
+        }
     }
 
-    pub fn key(&mut self, key: Option<DecodedKey>) {
-        if let Some(dir) = key2dir(key) {
-            let neighbor = self.pacman.neighbor(dir);
+    fn resolve_move(&mut self) {
+        serial_println!("last key: {:?}", self.last_key);
+        if let Some(dir) = self.last_key {
+            serial_println!("dir: {:?}", dir);
+            let neighbor = self.pacman.pos.neighbor(dir);
+            serial_println!("neighbor: {:?}", neighbor);
             if neighbor.is_legal() {
                 let (row, col) = neighbor.row_col();
+                serial_println!("neighbor contents: {:?}", self.cells[row][col]);
                 if self.cells[row][col] != Cell::Wall {
-                    self.pacman = neighbor;
-                    self.update_pacman_char(dir);
+                    self.pacman.pos = neighbor;
+                    self.pacman.dir = dir;
                     match self.cells[row][col] {
                         Cell::Dot | Cell::PowerDot /*for now*/ => {
                             self.dots_eaten += 1;
@@ -156,10 +231,10 @@ impl Pacman {
                         }
                         _ => {}
                     }
+                    serial_println!("Updated: {:?}", self.pacman);
                 }
             }
         }
-        self.draw();
     }
 }
 
@@ -190,5 +265,29 @@ fn test_neighbor_dir() {
     let p = Position {col: 4, row: 2};
     for (d, col, row) in [(Dir::N, 4, 1), (Dir::S, 4, 3), (Dir::E, 5, 2), (Dir::W, 3, 2)].iter() {
         assert_eq!(p.neighbor(*d), Position {col: *col, row: *row});
+    }
+}
+
+#[test_case]
+fn first_few_moves() {
+    let mut game = PacmanGame::new();
+    let tests = [('w', 0, 0, 0), ('a', -1, 0, 1), ('a', -1, 0, 2), ('a', -1, 0, 3),
+        ('a', -1, 0, 4), /*('s', 0, 1, 5), ('s', 0, 1, 6), ('s', 0, 1, 7), ('s', 0, 1, 8),
+        ('s', 0, 1, 9), ('s', 0, 1, 10), ('s', 0, 1, 11), ('s', 0, 0, 11), ('d', 1, 0, 12),
+        ('d', 1, 0, 13), ('d', 1, 0, 14), ('d', 1, 0, 15), ('d', 1, 0, 16), ('d', 1, 0, 17),
+        ('w', 0, -1, 18), ('w', 0, -1, 19), ('w', 0, -1, 20), ('w', 0, -1, 21), ('w', 0, -1, 22),
+        ('w', 0, -1, 23), ('w', 0, 0, 23)*/
+    ];
+    for (key, col_diff, row_diff, score) in tests.iter() {
+        let was = game.pacman.pos;
+        game.key(Some(DecodedKey::Unicode(*key)));
+        for _ in 0..UPDATE_FREQUENCY {
+            game.tick();
+        }
+        let diff = game.pacman.pos - was;
+        serial_println!("diff: {:?}, key: {}", diff, key);
+        assert_eq!(diff.col, *col_diff);
+        assert_eq!(diff.row, *row_diff);
+        assert_eq!(game.dots_eaten, *score);
     }
 }
