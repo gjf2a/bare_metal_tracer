@@ -273,6 +273,12 @@ impl PacmanGame {
         self.resolve_move();
         self.last_key = None;
         self.pacman.tick();
+        for g in 0..self.ghosts.len() {
+            let ahead = self.cell(self.ghosts[g].pos.neighbor(self.ghosts[g].dir));
+            let left = self.cell(self.ghosts[g].pos.neighbor(self.ghosts[g].dir.left()));
+            let right = self.cell(self.ghosts[g].pos.neighbor(self.ghosts[g].dir.right()));
+            self.ghosts[g].go(ahead, left, right, self.pacman.pos);
+        }
     }
 
     pub fn tick(&mut self) {
@@ -379,4 +385,10 @@ fn test_icons() {
         assert_eq!(game.get_icon_color(*pos, &game.cell(*pos)),
                    (*icon, ColorCode::new(*foreground, Color::Black)));
     }
+}
+
+#[test_case]
+fn test_ghost_ai() {
+    let mut game = PacmanGame::new();
+
 }
