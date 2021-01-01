@@ -1,4 +1,4 @@
-use crate::vga_buffer::{BUFFER_WIDTH, BUFFER_HEIGHT, plot, ColorCode, Color};
+use crate::vga_buffer::{BUFFER_WIDTH, BUFFER_HEIGHT, plot, plot_str, plot_num, clear_row, ColorCode, Color};
 use pc_keyboard::{KeyCode, DecodedKey};
 use crate::{println,serial_println};
 use core::ops::Sub;
@@ -250,12 +250,26 @@ impl PacmanGame {
         self.cells[p.row as usize][p.col as usize]
     }
 
+    fn draw_header(&self) {
+        let header_color = ColorCode::new(Color::White, Color::Black);
+        let score_text = "Score:";
+        clear_row(0, Color::Black);
+        clear_row(1, Color::Black);
+        plot_str(score_text, 0, 0, header_color);
+        plot_num(self.dots_eaten as isize, score_text.len() + 1, 0, header_color);
+    }
+
     fn draw(&self) {
+        self.draw_header();
+        self.draw_board();
+    }
+
+    fn draw_board(&self) {
         for (row, contents) in self.cells.iter().enumerate() {
             for (col, cell) in contents.iter().enumerate() {
                 let p = Position {col: col as i16, row: row as i16};
                 let (c, color) = self.get_icon_color(p, cell);
-                plot(col, row + (BUFFER_HEIGHT - PACMAN_HEIGHT), c, color);
+                plot(c, col, row + (BUFFER_HEIGHT - PACMAN_HEIGHT), color);
             }
         }
     }

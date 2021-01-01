@@ -158,21 +158,42 @@ pub fn _print(args: fmt::Arguments) {
 pub fn clear_row(row: usize, background: Color) {
     let color = ColorCode::new(background, background);
     for col in 0..BUFFER_WIDTH {
-        plot(col, row, ' ', color);
+        plot(' ', col, row, color);
     }
 }
 
-pub fn plot_str(col: usize, row: usize, s: &str, color: ColorCode) {
+pub fn plot_str(s: &str, col: usize, row: usize, color: ColorCode) {
     use crate::serial_println;
     let end = BUFFER_WIDTH.min(col + s.len());
     for (c, chr) in (col..end).zip(s.chars()) {
         serial_println!("Plotting {} ({},{})", chr, c, row);
-        plot(c, row, chr, color);
+        plot(chr, c, row, color);
     }
 }
 
-pub fn plot(col: usize, row: usize, c: char, color: ColorCode) {
+pub fn plot(c: char, col: usize, row: usize, color: ColorCode) {
     WRITER.lock().plot(col, row, ScreenChar { ascii_character: c as u8, color_code: color });
+}
+
+pub fn plot_num(num: isize, col: usize, row: usize, color: ColorCode) {
+    if num == 0 {
+        plot('0', col, row, color);
+    } else if num < 0 {
+        plot('-', col, row, color);
+        plot_num(-num, col + 1, row, color);
+    } else {
+        let mut buffer = [' '; BUFFER_WIDTH];
+        let mut c = 0;
+        let mut num = num;
+        while num > 0 && c + col < buffer.len() {
+            buffer[c] = ((num % 10 + '0' as isize) as u8) as char;
+            num /= 10;
+            c += 1;
+        }
+        for i in (0..c) {
+            plot(buffer[i], col + c - i - 1, row, color);
+        }
+    }
 }
 
 pub fn peek(col: usize, row: usize) -> (char, ColorCode) {
@@ -226,8 +247,8 @@ fn string_at(s: &str, col: usize, row: usize) -> bool {
 fn test_plot_str() {
     let color = ColorCode::new(Color::Cyan, Color::Black);
     let test_str = "This is a test.";
-    plot_str(2, 3, test_str, color);
+    plot_str(test_str, 2, 3, color);
     assert!(string_at(test_str, 2, 3));
-    plot_str(BUFFER_WIDTH - 3, 3, test_str, color);
+    plot_str(test_str, BUFFER_WIDTH - 3, 3, color);
     assert!(string_at(test_str, BUFFER_WIDTH - 3, 3));
 }
