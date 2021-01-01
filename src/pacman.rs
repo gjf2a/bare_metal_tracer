@@ -530,7 +530,8 @@ fn test_ghost_ai() {
     let mut ghost = Ghost {
         pos: Position {col: 10, row: 15},
         dir: Dir::N,
-        color: Color::Black
+        color: Color::Black,
+        active: true
     };
     assert!(ghost.on_my_left(Position {col: 8, row: 15}));
     assert!(ghost.on_my_right(Position {col: 12, row: 15}));

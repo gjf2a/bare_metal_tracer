@@ -246,7 +246,7 @@ fn string_at(s: &str, col: usize, row: usize) -> bool {
 #[test_case]
 fn test_plot_str() {
     let color = ColorCode::new(Color::Cyan, Color::Black);
-    let test_str = "This is a test.";
+    let test_str = "Test.";
     plot_str(test_str, 2, 3, color);
     assert!(string_at(test_str, 2, 3));
     plot_str(test_str, BUFFER_WIDTH - 3, 3, color);
