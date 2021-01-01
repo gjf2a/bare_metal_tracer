@@ -376,6 +376,7 @@ impl PacmanGame {
     fn update_ghosts(&mut self) {
         for g in 0..self.ghosts.len() {
             let (ahead, left, right) = self.ahead_left_right(self.ghosts[g].pos, self.ghosts[g].dir);
+            self.resolve_ghost_collision(g);
             self.ghosts[g].go(ahead, left, right, self.pacman.pos);
             self.resolve_ghost_collision(g);
         }
