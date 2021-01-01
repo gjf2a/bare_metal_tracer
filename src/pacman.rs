@@ -437,23 +437,28 @@ impl PacmanGame {
             if neighbor.is_legal() {
                 let (row, col) = neighbor.row_col();
                 if self.cells[row][col] != Cell::Wall {
-                    self.pacman.pos = neighbor;
-                    self.pacman.dir = dir;
-                    match self.cells[row][col] {
-                        Cell::Dot => {
-                            self.dots_eaten += 1;
-                            self.cells[row][col] = Cell::Empty;
-                        }
-                        Cell::PowerDot => {
-                            self.dots_eaten += 10;
-                            self.cells[row][col] = Cell::Empty;
-                            self.status = Status::Empowered;
-                            self.empowered_ticks_left = EMPOWER_TICKS;
-                        }
-                        _ => {}
-                    }
+                    self.move_to(neighbor, dir);
                 }
             }
+        }
+    }
+
+    fn move_to(&mut self, neighbor: Position, dir: Dir) {
+        self.pacman.pos = neighbor;
+        self.pacman.dir = dir;
+        let (row, col) = neighbor.row_col();
+        match self.cells[row][col] {
+            Cell::Dot => {
+                self.dots_eaten += 1;
+                self.cells[row][col] = Cell::Empty;
+            }
+            Cell::PowerDot => {
+                self.dots_eaten += 10;
+                self.cells[row][col] = Cell::Empty;
+                self.status = Status::Empowered;
+                self.empowered_ticks_left = EMPOWER_TICKS;
+            }
+            _ => {}
         }
     }
 }
