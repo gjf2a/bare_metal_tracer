@@ -128,7 +128,7 @@ impl Pacman {
 
 #[derive(Copy,Clone,Debug,Eq,PartialEq)]
 struct Ghost {
-    pos: Position, dir: Dir, color: Color
+    pos: Position, dir: Dir, color: Color, active: bool
 }
 
 impl Ghost {
@@ -155,18 +155,28 @@ impl Ghost {
     }
 
     fn go(&mut self, ahead: Cell, left: Cell, right: Cell, pacman_pos: Position) {
-        if left == Cell::Wall && ahead == Cell::Wall && right == Cell::Wall {
-            self.dir = self.dir.reverse();
-        } else if left != Cell::Wall && (self.on_my_left(pacman_pos) || ahead == Cell::Wall) {
-            self.dir = self.dir.left();
-        } else if right != Cell::Wall && (self.on_my_right(pacman_pos) || ahead == Cell::Wall) {
-            self.dir = self.dir.right();
+        if self.active {
+            if left == Cell::Wall && ahead == Cell::Wall && right == Cell::Wall {
+                self.dir = self.dir.reverse();
+            } else if left != Cell::Wall && (self.on_my_left(pacman_pos) || ahead == Cell::Wall) {
+                self.dir = self.dir.left();
+            } else if right != Cell::Wall && (self.on_my_right(pacman_pos) || ahead == Cell::Wall) {
+                self.dir = self.dir.right();
+            }
+            self.pos = self.pos.neighbor(self.dir);
         }
-        self.pos = self.pos.neighbor(self.dir);
     }
 
     fn icon(&self) -> (char, ColorCode) {
-        ('A', ColorCode::new(self.color, Color::Black))
+        (if self.active {'A'} else {'*'}, ColorCode::new(self.color, Color::Black))
+    }
+
+    fn squash(&mut self) {
+        self.active = false;
+    }
+
+    fn revive(&mut self) {
+        self.active = true;
     }
 }
 
@@ -202,7 +212,9 @@ const EMPOWER_TICKS: usize = 60;
 
 #[derive(Copy,Clone,Eq,PartialEq,Debug)]
 enum Status {
-    NORMAL, OVER, EMPOWERED
+    Normal,
+    Over,
+    Empowered
 }
 
 #[derive(Debug,Clone,Eq,PartialEq)]
@@ -224,8 +236,8 @@ impl PacmanGame {
         let mut game = PacmanGame {
             cells: [[Cell::Dot; BUFFER_WIDTH]; PACMAN_HEIGHT],
             pacman: Pacman::new(Position { col: 0, row: 0}, '>'),
-            ghosts: [Ghost { pos: Position {col: 0, row: 0}, dir: Dir::N, color: Color::Black }; 4],
-            dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None, status: Status::NORMAL,
+            ghosts: [Ghost { pos: Position {col: 0, row: 0}, dir: Dir::N, color: Color::Black, active: true }; 4],
+            dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None, status: Status::Normal,
             empowered_ticks_left: 0
         };
         game.reset();
@@ -240,7 +252,7 @@ impl PacmanGame {
             }
         }
         assert_eq!(ghost, 4);
-        self.status = Status::NORMAL;
+        self.status = Status::Normal;
         self.dots_eaten = 0;
         self.last_key = None;
         self.empowered_ticks_left = 0;
@@ -252,7 +264,7 @@ impl PacmanGame {
             '.' => self.cells[row][col] = Cell::Dot,
             'A' => {
                 let (dir, color) = GHOST_STARTS[*ghost];
-                self.ghosts[*ghost] = Ghost {pos: Position {row: row as i16, col: col as i16}, dir, color};
+                self.ghosts[*ghost] = Ghost {pos: Position {row: row as i16, col: col as i16}, dir, color, active: true};
                 *ghost += 1;
             },
             'O' => self.cells[row][col] = Cell::PowerDot,
@@ -274,9 +286,9 @@ impl PacmanGame {
 
     fn draw_header(&self) {
         match self.status {
-            Status::NORMAL => self.draw_normal_header(),
-            Status::OVER => self.draw_game_over_header(),
-            Status::EMPOWERED => self.draw_empowered_header()
+            Status::Normal => self.draw_normal_header(),
+            Status::Over => self.draw_game_over_header(),
+            Status::Empowered => self.draw_empowered_header()
         }
     }
 
@@ -322,7 +334,7 @@ impl PacmanGame {
         let (icon, foreground) =
             if p == self.pacman.pos {
                 (match self.status {
-                    Status::OVER => '*',
+                    Status::Over => '*',
                     _ => self.pacman.icon()
                 }, Color::Yellow)
             } else {
@@ -353,7 +365,10 @@ impl PacmanGame {
         if self.empowered_ticks_left > 0 {
             self.empowered_ticks_left -= 1;
             if self.empowered_ticks_left == 0 {
-                self.status = Status::NORMAL;
+                self.status = Status::Normal;
+                for ghost in self.ghosts.iter_mut() {
+                    ghost.revive();
+                }
             }
         }
     }
@@ -362,8 +377,19 @@ impl PacmanGame {
         for g in 0..self.ghosts.len() {
             let (ahead, left, right) = self.ahead_left_right(self.ghosts[g].pos, self.ghosts[g].dir);
             self.ghosts[g].go(ahead, left, right, self.pacman.pos);
-            if self.ghosts[g].pos == self.pacman.pos {
-                self.status = Status::OVER;
+            self.resolve_ghost_collision(g);
+        }
+    }
+
+    fn resolve_ghost_collision(&mut self, g: usize) {
+        if self.ghosts[g].pos == self.pacman.pos && self.ghosts[g].active {
+            match self.status {
+                Status::Normal => self.status = Status::Over,
+                Status::Empowered => {
+                    self.dots_eaten += 100;
+                    self.ghosts[g].squash();
+                }
+                Status::Over => {}
             }
         }
     }
@@ -387,7 +413,7 @@ impl PacmanGame {
 
     pub fn key(&mut self, key: Option<DecodedKey>) {
         match self.status {
-            Status::OVER => {
+            Status::Over => {
                 if let Some(decoded) = key {
                     match decoded {
                         DecodedKey::RawKey(KeyCode::S) | DecodedKey::Unicode('s') => self.reset(),
@@ -420,7 +446,7 @@ impl PacmanGame {
                         Cell::PowerDot => {
                             self.dots_eaten += 10;
                             self.cells[row][col] = Cell::Empty;
-                            self.status = Status::EMPOWERED;
+                            self.status = Status::Empowered;
                             self.empowered_ticks_left = EMPOWER_TICKS;
                         }
                         _ => {}
