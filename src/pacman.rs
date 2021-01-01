@@ -245,7 +245,7 @@ impl PacmanGame {
     fn translate_icon(&mut self, ghost: &mut usize, row: usize, col: usize, icon: char) {
         match icon {
             '#' => self.cells[row][col] = Cell::Wall,
-            '.' => {},
+            '.' => self.cells[row][col] = Cell::Dot,
             'A' => {
                 let (dir, color) = GHOST_STARTS[*ghost];
                 self.ghosts[*ghost] = Ghost {pos: Position {row: row as i16, col: col as i16}, dir, color};
