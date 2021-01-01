@@ -159,9 +159,9 @@ impl Ghost {
     fn go(&mut self, ahead: Cell, left: Cell, right: Cell, pacman_pos: Position) {
         if left == Cell::Wall && ahead == Cell::Wall && right == Cell::Wall {
             self.dir = self.dir.reverse();
-        } else if left == Cell::Empty && (self.on_my_left(pacman_pos) || ahead == Cell::Wall) {
+        } else if left != Cell::Wall && (self.on_my_left(pacman_pos) || ahead == Cell::Wall) {
             self.dir = self.dir.left();
-        } else if right == Cell::Empty && (self.on_my_right(pacman_pos) || ahead == Cell::Wall) {
+        } else if right != Cell::Wall && (self.on_my_right(pacman_pos) || ahead == Cell::Wall) {
             self.dir = self.dir.right();
         }
         self.pos = self.pos.neighbor(self.dir);
@@ -179,20 +179,20 @@ const START: &'static str =
      #.#################.##.##.###.####.#.##############.##.##.##.##.################
      #.#################.##.##.###.####.#.##############.##.##.##.##.################
      #.#################.##.##.###.####.#.##############.##.##.##.##.################
-     ........O.........................................................O.............
+     #.......O.........................................................O............#
      ###.####.#####.######.####.#.#.#######.#.####.####.#.######.#.####.###.###.##.##
      ###.####.#####.######.####.#.#.#######.#.####.####.#.######.#.####.###.###.##.##
      ###.####.#####.######.####.#.#.#######.#.####.####.#.######.#.####.###.###.##.##
      ###.####.#####.######.####.#.#.#######.#.####.####.#.######.#.####.###.###.##.##
      ###.####.#####.######.####.#.#.#######.#.####.####.#.######.#.####.###.###.##.##
-     .......................................<........................................
+     #......................................<.......................................#
      #####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.##
      #####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.##
      #####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.##
      #####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.##
      #####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.##
      #####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.#####.##
-     .........O...........................................................O..........
+     #........O...........................................................O.........#
      ####.####.####.####.####.####.####.####.####.####.####.####.####.####.####.##.##
      ####.####.####.####.####.####.####.####.####.####.####.####.####.####.####.##.##
      ####.####.####.####.####.####.####.####.####.####.####.####.####.####.####.##.##
@@ -285,11 +285,16 @@ impl PacmanGame {
         self.last_key = None;
         self.pacman.tick();
         for g in 0..self.ghosts.len() {
-            let ahead = self.cell(self.ghosts[g].pos.neighbor(self.ghosts[g].dir));
-            let left = self.cell(self.ghosts[g].pos.neighbor(self.ghosts[g].dir.left()));
-            let right = self.cell(self.ghosts[g].pos.neighbor(self.ghosts[g].dir.right()));
+            let (ahead, left, right) = self.ahead_left_right(self.ghosts[g].pos, self.ghosts[g].dir);
             self.ghosts[g].go(ahead, left, right, self.pacman.pos);
         }
+    }
+
+    fn ahead_left_right(&self, p: Position, dir: Dir) -> (Cell,Cell,Cell) {
+        let ahead = self.cell(p.neighbor(dir));
+        let left = self.cell(p.neighbor(dir.left()));
+        let right = self.cell(p.neighbor(dir.right()));
+        (ahead, left, right)
     }
 
     pub fn tick(&mut self) {
@@ -388,7 +393,7 @@ fn test_icons() {
         (game.pacman.pos, Color::Yellow, '<'),
         (game.pacman.pos.neighbor(Dir::N), Color::Blue, '#'),
         (game.pacman.pos.neighbor(Dir::W), Color::White, '.'),
-        (game.ghosts[0], Color::Red, 'A'),
+        (game.ghosts[0].pos, Color::Red, 'A'),
         (Position {row: 6, col: 8}, Color::Green, 'O')
     ];
 
@@ -400,6 +405,48 @@ fn test_icons() {
 
 #[test_case]
 fn test_ghost_ai() {
-    let mut game = PacmanGame::new();
+    let mut ghost = Ghost {
+        pos: Position {col: 10, row: 15},
+        dir: Dir::N,
+        color: Color::Black
+    };
+    assert!(ghost.on_my_left(Position {col: 8, row: 15}));
+    assert!(ghost.on_my_right(Position {col: 12, row: 15}));
+    assert!(!ghost.on_my_right(Position {col: 8, row: 15}));
+    assert!(!ghost.on_my_left(Position {col: 12, row: 15}));
 
+    ghost.pos.col = 1;
+    ghost.dir = Dir::W;
+    ghost.go(Cell::Wall, Cell::Empty, Cell::Wall, Position {col: 2, row: 15});
+    assert_eq!(ghost.dir, Dir::S);
+    assert_eq!(ghost.pos, Position {col: 1, row: 16});
+}
+
+#[test_case]
+fn test_above_left_right() {
+    let game = PacmanGame::new();
+    let tests = [
+        (Dir::W, Cell::Wall, Cell::Dot, Cell::Wall),
+        (Dir::N, Cell::Wall, Cell::Wall, Cell::Dot),
+        (Dir::E, Cell::Dot, Cell::Wall, Cell::Dot),
+        (Dir::S, Cell::Dot, Cell::Dot, Cell::Wall)
+    ];
+
+    for (dir, ahead, left, right) in tests.iter() {
+        let (a, l, r) = game.ahead_left_right(Position {col: 1, row: 1}, *dir);
+        assert_eq!(a, *ahead);
+        assert_eq!(l, *left);
+        assert_eq!(r, *right);
+    }
+}
+
+#[test_case]
+fn test_exit_screen_bug() {
+    let mut game = PacmanGame::new();
+    game.ghosts[1].pos = Position {row: 1, col: 1};
+    game.ghosts[1].dir = Dir::W;
+    let (ahead, left, right) = game.ahead_left_right(game.ghosts[1].pos, game.ghosts[1].dir);
+    game.ghosts[1].go(ahead, left, right, game.pacman.pos);
+    assert_eq!(game.ghosts[1].dir, Dir::S);
+    assert_eq!(game.ghosts[1].pos, Position {row: 2, col: 1});
 }
