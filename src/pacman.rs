@@ -100,8 +100,6 @@ impl Position {
     }
 }
 
-const UPDATE_FREQUENCY: usize = 3;
-
 #[derive(Copy,Clone,Eq,PartialEq,Debug)]
 struct Pacman {
     pos: Position, dir: Dir, open: bool
@@ -197,8 +195,10 @@ const START: &'static str =
      #.........A............................................................A.......#
      ################################################################################";
 
+const UPDATE_FREQUENCY: usize = 3;
 const PACMAN_HEIGHT: usize = BUFFER_HEIGHT - 2;
 const HEADER_SPACE: usize = BUFFER_HEIGHT - PACMAN_HEIGHT;
+const EMPOWER_TICKS: usize = 60;
 
 #[derive(Copy,Clone,Eq,PartialEq,Debug)]
 enum Status {
@@ -213,7 +213,8 @@ pub struct PacmanGame {
     status: Status,
     dots_eaten: u32,
     countdown: usize,
-    last_key: Option<Dir>
+    last_key: Option<Dir>,
+    empowered_ticks_left: usize
 }
 
 const GHOST_STARTS: [(Dir, Color); 4] = [(Dir::E, Color::Red),  (Dir::W, Color::Pink), (Dir::E, Color::LightGreen), (Dir::W, Color::Cyan)];
@@ -224,7 +225,9 @@ impl PacmanGame {
             cells: [[Cell::Dot; BUFFER_WIDTH]; PACMAN_HEIGHT],
             pacman: Pacman::new(Position { col: 0, row: 0}, '>'),
             ghosts: [Ghost { pos: Position {col: 0, row: 0}, dir: Dir::N, color: Color::Black }; 4],
-            dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None, status: Status::NORMAL};
+            dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None, status: Status::NORMAL,
+            empowered_ticks_left: 0
+        };
         game.reset();
         game
     }
@@ -240,6 +243,7 @@ impl PacmanGame {
         self.status = Status::NORMAL;
         self.dots_eaten = 0;
         self.last_key = None;
+        self.empowered_ticks_left = 0;
     }
 
     fn translate_icon(&mut self, ghost: &mut usize, row: usize, col: usize, icon: char) {
@@ -297,7 +301,11 @@ impl PacmanGame {
 
     fn draw_empowered_header(&self) {
         self.draw_normal_header();
-        self.draw_subheader("Powered up!");
+        const POWER_UP_MSG: &str = "Powered up!";
+        self.draw_subheader(POWER_UP_MSG);
+        for i in 0..self.empowered_ticks_left {
+            plot('.', i + POWER_UP_MSG.len(), 1, ColorCode::new(Color::Cyan, Color::Black));
+        }
     }
 
     fn draw_board(&self) {
@@ -337,6 +345,20 @@ impl PacmanGame {
         self.resolve_move();
         self.last_key = None;
         self.pacman.tick();
+        self.empower_tick();
+        self.update_ghosts();
+    }
+
+    fn empower_tick(&mut self) {
+        if self.empowered_ticks_left > 0 {
+            self.empowered_ticks_left -= 1;
+            if self.empowered_ticks_left == 0 {
+                self.status = Status::NORMAL;
+            }
+        }
+    }
+
+    fn update_ghosts(&mut self) {
         for g in 0..self.ghosts.len() {
             let (ahead, left, right) = self.ahead_left_right(self.ghosts[g].pos, self.ghosts[g].dir);
             self.ghosts[g].go(ahead, left, right, self.pacman.pos);
@@ -391,9 +413,15 @@ impl PacmanGame {
                     self.pacman.pos = neighbor;
                     self.pacman.dir = dir;
                     match self.cells[row][col] {
-                        Cell::Dot | Cell::PowerDot /*for now*/ => {
+                        Cell::Dot => {
                             self.dots_eaten += 1;
                             self.cells[row][col] = Cell::Empty;
+                        }
+                        Cell::PowerDot => {
+                            self.dots_eaten += 10;
+                            self.cells[row][col] = Cell::Empty;
+                            self.status = Status::EMPOWERED;
+                            self.empowered_ticks_left = EMPOWER_TICKS;
                         }
                         _ => {}
                     }
