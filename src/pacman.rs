@@ -198,12 +198,19 @@ const START: &'static str =
      ################################################################################";
 
 const PACMAN_HEIGHT: usize = BUFFER_HEIGHT - 2;
+const HEADER_SPACE: usize = BUFFER_HEIGHT - PACMAN_HEIGHT;
+
+#[derive(Copy,Clone,Eq,PartialEq,Debug)]
+enum Status {
+    NORMAL, OVER, EMPOWERED
+}
 
 #[derive(Debug,Clone,Eq,PartialEq)]
 pub struct PacmanGame {
     cells: [[Cell; BUFFER_WIDTH]; PACMAN_HEIGHT],
     pacman: Pacman,
     ghosts: [Ghost; 4],
+    status: Status,
     dots_eaten: u32,
     countdown: usize,
     last_key: Option<Dir>
@@ -217,16 +224,22 @@ impl PacmanGame {
             cells: [[Cell::Dot; BUFFER_WIDTH]; PACMAN_HEIGHT],
             pacman: Pacman::new(Position { col: 0, row: 0}, '>'),
             ghosts: [Ghost { pos: Position {col: 0, row: 0}, dir: Dir::N, color: Color::Black }; 4],
-            dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None};
+            dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None, status: Status::NORMAL};
+        game.reset();
+        game
+    }
+
+    fn reset(&mut self) {
         let mut ghost = 0;
         for (row, row_chars) in START.split('\n').enumerate() {
-            println!("row: {} len: {}", row, row_chars.len());
             for (col, icon) in row_chars.trim().chars().enumerate() {
-                game.translate_icon(&mut ghost, row, col, icon);
+                self.translate_icon(&mut ghost, row, col, icon);
             }
         }
         assert_eq!(ghost, 4);
-        game
+        self.status = Status::NORMAL;
+        self.dots_eaten = 0;
+        self.last_key = None;
     }
 
     fn translate_icon(&mut self, ghost: &mut usize, row: usize, col: usize, icon: char) {
@@ -250,7 +263,21 @@ impl PacmanGame {
         self.cells[p.row as usize][p.col as usize]
     }
 
+    fn draw(&self) {
+        self.draw_header();
+        self.draw_board();
+    }
+
     fn draw_header(&self) {
+        match self.status {
+            Status::NORMAL => self.draw_normal_header(),
+            Status::OVER => self.draw_game_over_header(),
+            Status::EMPOWERED => self.draw_empowered_header()
+        }
+    }
+
+    fn draw_normal_header(&self) {
+        clear_row(1, Color::Black);
         let header_color = ColorCode::new(Color::White, Color::Black);
         let score_text = "Score:";
         clear_row(0, Color::Black);
@@ -259,9 +286,18 @@ impl PacmanGame {
         plot_num(self.dots_eaten as isize, score_text.len() + 1, 0, header_color);
     }
 
-    fn draw(&self) {
-        self.draw_header();
-        self.draw_board();
+    fn draw_subheader(&self, subheader: &str) {
+        plot_str(subheader, 0, 1, ColorCode::new(Color::LightRed, Color::Black));
+    }
+
+    fn draw_game_over_header(&self) {
+        self.draw_normal_header();
+        self.draw_subheader("Game over. Press S to restart.");
+    }
+
+    fn draw_empowered_header(&self) {
+        self.draw_normal_header();
+        self.draw_subheader("Powered up!");
     }
 
     fn draw_board(&self) {
@@ -269,7 +305,7 @@ impl PacmanGame {
             for (col, cell) in contents.iter().enumerate() {
                 let p = Position {col: col as i16, row: row as i16};
                 let (c, color) = self.get_icon_color(p, cell);
-                plot(c, col, row + (BUFFER_HEIGHT - PACMAN_HEIGHT), color);
+                plot(c, col, row + HEADER_SPACE, color);
             }
         }
     }
@@ -277,7 +313,10 @@ impl PacmanGame {
     fn get_icon_color(&self, p: Position, cell: &Cell) -> (char, ColorCode) {
         let (icon, foreground) =
             if p == self.pacman.pos {
-                (self.pacman.icon(), Color::Yellow)
+                (match self.status {
+                    Status::OVER => '*',
+                    _ => self.pacman.icon()
+                }, Color::Yellow)
             } else {
                 for ghost in self.ghosts.iter() {
                     if ghost.pos == p {
@@ -301,6 +340,9 @@ impl PacmanGame {
         for g in 0..self.ghosts.len() {
             let (ahead, left, right) = self.ahead_left_right(self.ghosts[g].pos, self.ghosts[g].dir);
             self.ghosts[g].go(ahead, left, right, self.pacman.pos);
+            if self.ghosts[g].pos == self.pacman.pos {
+                self.status = Status::OVER;
+            }
         }
     }
 
@@ -322,9 +364,21 @@ impl PacmanGame {
     }
 
     pub fn key(&mut self, key: Option<DecodedKey>) {
-        let key = key2dir(key);
-        if key.is_some() {
-            self.last_key = key;
+        match self.status {
+            Status::OVER => {
+                if let Some(decoded) = key {
+                    match decoded {
+                        DecodedKey::RawKey(KeyCode::S) | DecodedKey::Unicode('s') => self.reset(),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {
+                let key = key2dir(key);
+                if key.is_some() {
+                    self.last_key = key;
+                }
+            }
         }
     }
 
