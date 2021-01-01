@@ -155,6 +155,22 @@ pub fn _print(args: fmt::Arguments) {
     });
 }
 
+pub fn clear_row(row: usize, background: Color) {
+    let color = ColorCode::new(background, background);
+    for col in 0..BUFFER_WIDTH {
+        plot(col, row, ' ', color);
+    }
+}
+
+pub fn plot_str(col: usize, row: usize, s: &str, color: ColorCode) {
+    use crate::serial_println;
+    let end = BUFFER_WIDTH.min(col + s.len());
+    for (c, chr) in (col..end).zip(s.chars()) {
+        serial_println!("Plotting {} ({},{})", chr, c, row);
+        plot(c, row, chr, color);
+    }
+}
+
 pub fn plot(col: usize, row: usize, c: char, color: ColorCode) {
     WRITER.lock().plot(col, row, ScreenChar { ascii_character: c as u8, color_code: color });
 }
@@ -190,4 +206,28 @@ fn test_println_output() {
             assert_eq!(char::from(screen_char.ascii_character), c);
         }
     });
+}
+
+fn string_at(s: &str, col: usize, row: usize) -> bool {
+    use crate::serial_println;
+    let end = BUFFER_WIDTH.min(col + s.len());
+    for (c, chr) in (col..end).zip(s.chars()) {
+        serial_println!("c: {} chr: {} peek: {:?}", c, chr, peek(c, row));
+        if peek(c, row).0 != chr {
+            serial_println!("Failing...");
+            return false;
+        }
+    }
+    true
+}
+
+// This seems to succeed sometimes and fail sometimes. I have no idea why.
+#[test_case]
+fn test_plot_str() {
+    let color = ColorCode::new(Color::Cyan, Color::Black);
+    let test_str = "This is a test.";
+    plot_str(2, 3, test_str, color);
+    assert!(string_at(test_str, 2, 3));
+    plot_str(BUFFER_WIDTH - 3, 3, test_str, color);
+    assert!(string_at(test_str, BUFFER_WIDTH - 3, 3));
 }

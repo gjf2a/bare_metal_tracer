@@ -178,9 +178,7 @@ const START: &'static str =
      #.#################.##.##.###.####.#.##############.##.##.##.##.################
      #.#################.##.##.###.####.#.##############.##.##.##.##.################
      #.#################.##.##.###.####.#.##############.##.##.##.##.################
-     #.#################.##.##.###.####.#.##############.##.##.##.##.################
      #.......O.........................................................O............#
-     ###.####.#####.######.####.#.#.#######.#.####.####.#.######.#.####.###.###.##.##
      ###.####.#####.######.####.#.#.#######.#.####.####.#.######.#.####.###.###.##.##
      ###.####.#####.######.####.#.#.#######.#.####.####.#.######.#.####.###.###.##.##
      ###.####.#####.######.####.#.#.#######.#.####.####.#.######.#.####.###.###.##.##
@@ -199,9 +197,11 @@ const START: &'static str =
      #.........A............................................................A.......#
      ################################################################################";
 
+const PACMAN_HEIGHT: usize = BUFFER_HEIGHT - 2;
+
 #[derive(Debug,Clone,Eq,PartialEq)]
 pub struct PacmanGame {
-    cells: [[Cell; BUFFER_WIDTH]; BUFFER_HEIGHT],
+    cells: [[Cell; BUFFER_WIDTH]; PACMAN_HEIGHT],
     pacman: Pacman,
     ghosts: [Ghost; 4],
     dots_eaten: u32,
@@ -214,7 +214,7 @@ const GHOST_STARTS: [(Dir, Color); 4] = [(Dir::E, Color::Red),  (Dir::W, Color::
 impl PacmanGame {
     pub fn new() -> Self {
         let mut game = PacmanGame {
-            cells: [[Cell::Dot; BUFFER_WIDTH]; BUFFER_HEIGHT],
+            cells: [[Cell::Dot; BUFFER_WIDTH]; PACMAN_HEIGHT],
             pacman: Pacman::new(Position { col: 0, row: 0}, '>'),
             ghosts: [Ghost { pos: Position {col: 0, row: 0}, dir: Dir::N, color: Color::Black }; 4],
             dots_eaten: 0, countdown: UPDATE_FREQUENCY, last_key: None};
@@ -255,7 +255,7 @@ impl PacmanGame {
             for (col, cell) in contents.iter().enumerate() {
                 let p = Position {col: col as i16, row: row as i16};
                 let (c, color) = self.get_icon_color(p, cell);
-                plot(col, row, c, color);
+                plot(col, row + (BUFFER_HEIGHT - PACMAN_HEIGHT), c, color);
             }
         }
     }
@@ -394,7 +394,7 @@ fn test_icons() {
         (game.pacman.pos.neighbor(Dir::N), Color::Blue, '#'),
         (game.pacman.pos.neighbor(Dir::W), Color::White, '.'),
         (game.ghosts[0].pos, Color::Red, 'A'),
-        (Position {row: 6, col: 8}, Color::Green, 'O')
+        (Position {row: 5, col: 8}, Color::Green, 'O')
     ];
 
     for (pos, foreground, icon) in tests.iter() {
