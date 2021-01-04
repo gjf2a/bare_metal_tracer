@@ -100,9 +100,3 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
     }
 }
-
-#[test_case]
-fn test_breakpoint_exception() {
-    // invoke a breakpoint exception
-    x86_64::instructions::interrupts::int3();
-}

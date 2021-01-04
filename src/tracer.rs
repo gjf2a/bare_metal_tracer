@@ -188,7 +188,7 @@ fn key2dir(key: Option<DecodedKey>) -> Option<Dir> {
         }
     }
 }
-
+/*
 #[test_case]
 fn test_neighbor_dir() {
     let p = Position {col: 4, row: 2};
@@ -197,3 +197,4 @@ fn test_neighbor_dir() {
     }
 }
 
+*/
