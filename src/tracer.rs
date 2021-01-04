@@ -1,50 +1,10 @@
-use crate::vga_buffer::{BUFFER_WIDTH, BUFFER_HEIGHT, plot, plot_str, plot_num, clear_row, ColorCode, Color};
+use pluggable_interrupt_os::vga_buffer::{BUFFER_WIDTH, BUFFER_HEIGHT, plot, ColorCode, Color};
 use pc_keyboard::{KeyCode, DecodedKey};
-use crate::{println,serial_println};
-use core::ops::Sub;
 
 #[derive(Debug,Copy,Clone,Eq,PartialEq)]
 #[repr(u8)]
 pub enum Dir {
     N, S, E, W
-}
-
-impl Dir {
-    fn icon(&self) -> char {
-        match self {
-            Dir::N => 'v',
-            Dir::S => '^',
-            Dir::E => '<',
-            Dir::W => '>'
-        }
-    }
-
-    fn reverse(&self) -> Dir {
-        match self {
-            Dir::N => Dir::S,
-            Dir::S => Dir::N,
-            Dir::E => Dir::W,
-            Dir::W => Dir::E
-        }
-    }
-
-    fn left(&self) -> Dir {
-        match self {
-            Dir::N => Dir::W,
-            Dir::S => Dir::E,
-            Dir::E => Dir::N,
-            Dir::W => Dir::S
-        }
-    }
-
-    fn right(&self) -> Dir {
-        match self {
-            Dir::N => Dir::E,
-            Dir::S => Dir::W,
-            Dir::E => Dir::S,
-            Dir::W => Dir::N
-        }
-    }
 }
 
 impl From<char> for Dir {
@@ -124,10 +84,6 @@ impl TracerGame {
         game
     }
 
-    fn cell(&self, p: Position) -> Cell {
-        self.cells[p.row as usize][p.col as usize]
-    }
-
     fn draw(&self) {
         let color = ColorCode::new(Color::Cyan, Color::Black);
         for (row, contents) in self.cells.iter().enumerate() {
@@ -159,7 +115,7 @@ impl TracerGame {
         }
     }
 
-    pub fn key(&mut self, key: Option<DecodedKey>) {
+    pub fn key(&mut self, key: DecodedKey) {
         let key = key2dir(key);
         if key.is_some() {
             self.last_key = key;
@@ -167,24 +123,21 @@ impl TracerGame {
     }
 }
 
-fn key2dir(key: Option<DecodedKey>) -> Option<Dir> {
+fn key2dir(key: DecodedKey) -> Option<Dir> {
     match key {
-        None => None,
-        Some(key) => match key {
-            DecodedKey::RawKey(k) => match k {
-                KeyCode::ArrowUp => Some(Dir::N),
-                KeyCode::ArrowDown => Some(Dir::S),
-                KeyCode::ArrowLeft => Some(Dir::W),
-                KeyCode::ArrowRight => Some(Dir::E),
-                _ => None
-            }
-            DecodedKey::Unicode(c) => match c {
-                'w' => Some(Dir::N),
-                'a' => Some(Dir::W),
-                's' => Some(Dir::S),
-                'd' => Some(Dir::E),
-                _ => None
-            }
+        DecodedKey::RawKey(k) => match k {
+            KeyCode::ArrowUp => Some(Dir::N),
+            KeyCode::ArrowDown => Some(Dir::S),
+            KeyCode::ArrowLeft => Some(Dir::W),
+            KeyCode::ArrowRight => Some(Dir::E),
+            _ => None
+        }
+        DecodedKey::Unicode(c) => match c {
+            'w' => Some(Dir::N),
+            'a' => Some(Dir::W),
+            's' => Some(Dir::S),
+            'd' => Some(Dir::E),
+            _ => None
         }
     }
 }
