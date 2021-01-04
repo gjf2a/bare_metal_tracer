@@ -67,7 +67,7 @@ impl Position {
 
 const UPDATE_FREQUENCY: usize = 1;
 
-#[derive(Debug,Clone,Eq,PartialEq)]
+#[derive(Copy,Debug,Clone,Eq,PartialEq)]
 pub struct TracerGame {
     cells: [[Cell; BUFFER_WIDTH]; BUFFER_HEIGHT],
     pos: Position,
