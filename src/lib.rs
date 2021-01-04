@@ -1,3 +1,5 @@
+#![cfg_attr(not(test), no_std)]
+
 use pluggable_interrupt_os::vga_buffer::{BUFFER_WIDTH, BUFFER_HEIGHT, plot, ColorCode, Color};
 use pc_keyboard::{KeyCode, DecodedKey};
 
@@ -141,6 +143,24 @@ fn key2dir(key: DecodedKey) -> Option<Dir> {
         }
     }
 }
+
+// Still figuring out what to do with unit tests.
+
+/*
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_neighbor_dir() {
+        let p = Position {col: 4, row: 2};
+        for (d, col, row) in [(Dir::N, 4, 1), (Dir::S, 4, 3), (Dir::E, 5, 2), (Dir::W, 3, 2)].iter() {
+            assert_eq!(p.neighbor(*d), Position {col: *col, row: *row});
+        }
+    }
+}
+*/
+
 /*
 #[test_case]
 fn test_neighbor_dir() {
