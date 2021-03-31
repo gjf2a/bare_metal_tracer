@@ -14,7 +14,7 @@ x86_64 = "0.12.1"
 uart_16550 = "0.2.0"
 pic8259_simple = "0.2.0"
 pc-keyboard = "0.5.0"
-pluggable_interrupt_os = "0.2.0"
+pluggable_interrupt_os = {git = "https://github.com/gjf2a/pluggable_interrupt_os"}
 
 [dependencies.lazy_static]
 version = "1.0"
